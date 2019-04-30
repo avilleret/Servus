@@ -37,9 +37,16 @@ namespace chrono = std::chrono;
 
 // http://stackoverflow.com/questions/14430906
 //   Proper way of doing this is using the threaded polling in avahi
+namespace servus {
+inline
+std::mutex& avahi_mutex()
+{
+  static std::mutex _mutex;
+  return _mutex;
+}
+}
 namespace
 {
-static std::mutex _mutex;
 
 int64_t _elapsedMilliseconds(
     const chrono::high_resolution_clock::time_point& startTime )
@@ -59,7 +66,7 @@ namespace
 {
 AvahiSimplePoll* _newSimplePoll()
 {
-  ScopedLock lock( _mutex );
+  ScopedLock lock( avahi_mutex() );
   return avahi_simple_poll_new();
 }
 }
@@ -82,7 +89,7 @@ public:
       throw std::runtime_error( "Can't setup avahi poll device" );
 
     int error = 0;
-    ScopedLock lock( _mutex );
+    ScopedLock lock( avahi_mutex() );
     _client = avahi_client_new( avahi_simple_poll_get( _poll ),
                                 (AvahiClientFlags)(0), _clientCBS, this,
                                 &error );
@@ -97,7 +104,7 @@ public:
     withdraw();
     endBrowsing();
 
-    ScopedLock lock( _mutex );
+    ScopedLock lock( avahi_mutex() );
     if( _client )
       avahi_client_free( _client );
     if( _poll )
@@ -110,7 +117,7 @@ public:
                                    const std::string& instance ) final override
   {
 
-    ScopedLock lock( _mutex );
+    ScopedLock lock( avahi_mutex() );
 
     _result = servus::Result::PENDING;
     _port = port;
@@ -138,7 +145,7 @@ public:
 
   void withdraw() final override
   {
-    ScopedLock lock( _mutex );
+    ScopedLock lock( avahi_mutex() );
     _announce.clear();
     _port = 0;
     if( _group )
@@ -147,7 +154,7 @@ public:
 
   bool isAnnounced() const final override
   {
-    ScopedLock lock( _mutex );
+    ScopedLock lock( avahi_mutex() );
     return ( _group && !avahi_entry_group_is_empty( _group ));
   }
 
@@ -157,7 +164,7 @@ public:
     if( _browser )
       return servus::Result( servus::Result::PENDING );
 
-    ScopedLock lock( _mutex );
+    ScopedLock lock( avahi_mutex() );
     _scope = addr;
     _instanceMap.clear();
     _result = servus::Result::SUCCESS;
@@ -176,7 +183,7 @@ public:
 
   servus::Result browse( const int32_t timeout ) final override
   {
-    ScopedLock lock( _mutex );
+    ScopedLock lock( avahi_mutex() );
     _result = servus::Result::PENDING;
     const chrono::high_resolution_clock::time_point& startTime =
         chrono::high_resolution_clock::now();
@@ -203,7 +210,7 @@ public:
 
   void endBrowsing() final override
   {
-    ScopedLock lock( _mutex );
+    ScopedLock lock( avahi_mutex() );
     if( _browser )
       avahi_service_browser_free( _browser );
     _browser = 0;
